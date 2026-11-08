@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DUAL//SELF — Confession ẩn danh</title>
+<style>
+  :root{
+    --bg:#07070b;
+    --panel:#0e0e16;
+    --line:#1f1f2e;
+    --text:#e8e8f0;
+    --muted:#8a8aa3;
+    --cyan:#22f0ff;
+    --pink:#ff2bd6;
+    --lime:#b6ff3b;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:"Geist",system-ui,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    min-height:100vh;
+    background-image:
+      radial-gradient(600px 300px at 0% 0%, rgba(34,240,255,.10), transparent 70%),
+      radial-gradient(600px 300px at 100% 0%, rgba(255,43,214,.10), transparent 70%),
+      linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+    background-size:auto,auto,32px 32px,32px 32px;
+  }
+  .mono{font-family:"Geist Mono",ui-monospace,monospace}
+  .wrap{max-width:760px;margin:0 auto;padding:28px 16px 64px}
+
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:28px;flex-wrap:wrap}
+  .logo{font-weight:800;font-size:28px;letter-spacing:-.02em;line-height:1}
+  .logo .a{color:var(--cyan);text-shadow:0 0 12px rgba(34,240,255,.7)}
+  .logo .b{color:var(--pink);text-shadow:0 0 12px rgba(255,43,214,.7)}
+  .logo .sl{color:var(--muted);margin:0 2px}
+  .tag{font-size:11px;color:var(--muted);letter-spacing:.18em;text-transform:uppercase;margin-top:6px}
+  .online{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);border:1px solid var(--line);padding:6px 10px;border-radius:999px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--lime);box-shadow:0 0 8px var(--lime);animation:pulse 1.6s infinite}
+  @keyframes pulse{50%{opacity:.35}}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;position:relative}
+
+  /* composer */
+  .composer{padding:18px;margin-bottom:28px}
+  .composer::before{content:"";position:absolute;inset:-1px;border-radius:15px;padding:1px;
+    background:linear-gradient(120deg,var(--cyan),transparent 40%,transparent 60%,var(--pink));
+    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
+  .switch{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:#0a0a11;border:1px solid var(--line);border-radius:10px;padding:4px;margin-bottom:14px}
+  .switch button{all:unset;cursor:pointer;text-align:center;padding:10px 8px;border-radius:7px;font-size:13px;font-weight:600;color:var(--muted);transition:.2s}
+  .switch button small{display:block;font-weight:400;font-size:11px;opacity:.8;margin-top:2px}
+  .switch button:focus-visible{outline:2px solid var(--text);outline-offset:2px}
+  .switch button[aria-pressed="true"][data-id="mask"]{color:#001417;background:var(--cyan);box-shadow:0 0 18px rgba(34,240,255,.45)}
+  .switch button[aria-pressed="true"][data-id="real"]{color:#1a0016;background:var(--pink);box-shadow:0 0 18px rgba(255,43,214,.45)}
+
+  label.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  textarea{width:100%;min-height:120px;resize:vertical;background:transparent;border:1px dashed var(--line);border-radius:10px;
+    color:var(--text);font:inherit;font-size:15px;line-height:1.6;padding:14px;outline:none;transition:border-color .2s}
+  textarea::placeholder{color:#5b5b73}
+  textarea:focus{border-style:solid;border-color:var(--accent,var(--cyan))}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;flex-wrap:wrap}
+  .moods{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{all:unset;cursor:pointer;font-size:12px;padding:6px 10px;border:1px solid var(--line);border-radius:999px;color:var(--muted)}
+  .chip[aria-pressed="true"]{color:var(--text);border-color:var(--accent,var(--cyan));box-shadow:0 0 10px color-mix(in srgb,var(--accent,var(--cyan)) 40%,transparent)}
+  .chip:focus-visible{outline:2px solid var(--text)}
+  .count{font-size:12px;color:var(--muted)}
+  .send{all:unset;cursor:pointer;font-weight:700;font-size:14px;padding:11px 18px;border-radius:10px;color:#07070b;
+    background:linear-gradient(90deg,var(--cyan),var(--pink));box-shadow:0 0 20px rgba(255,43,214,.3)}
+  .send:disabled{opacity:.35;cursor:not-allowed;box-shadow:none}
+  .send:focus-visible{outline:2px solid var(--text);outline-offset:3px}
+
+  /* feed */
+  .feedhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:10px;flex-wrap:wrap}
+  .feedhead h2{font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .filters{display:flex;gap:6px}
+  .feed{display:flex;flex-direction:column;gap:16px;list-style:none}
+
+  .post{padding:18px 18px 16px;border-left:3px solid var(--accent);animation:in .4s ease}
+  @keyframes in{from{opacity:0;transform:translateY(8px)}}
+  .post.mask{--accent:var(--cyan)}
+  .post.real{--accent:var(--pink)}
+  .meta{display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:12px;color:var(--muted)}
+  .avatar{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font-size:12px;font-weight:700;
+    color:var(--accent);border:1px solid var(--accent);box-shadow:inset 0 0 10px color-mix(in srgb,var(--accent) 30%,transparent)}
+  .who{color:var(--text);font-weight:600}
+  .badge{margin-left:auto;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 50%,transparent);padding:3px 8px;border-radius:999px}
+  .body{font-size:15px;line-height:1.65;white-space:pre-wrap;word-wrap:break-word}
+  .mood{display:inline-block;margin-top:10px;font-size:12px;color:var(--muted)}
+
+  .ai{margin-top:14px;border-radius:10px;padding:12px 14px;background:rgba(182,255,59,.04);border:1px solid rgba(182,255,59,.25)}
+  .ai-h{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--lime);margin-bottom:6px}
+  .ai-h svg{filter:drop-shadow(0 0 4px var(--lime))}
+  .ai p{font-size:14px;line-height:1.6;color:#d5ddc6}
+  .typing span{display:inline-block;width:6px;height:6px;margin-right:4px;border-radius:50%;background:var(--lime);animation:b 1s infinite}
+  .typing span:nth-child(2){animation-delay:.15s}.typing span:nth-child(3){animation-delay:.3s}
+  @keyframes b{50%{transform:translateY(-4px);opacity:.4}}
+  .cursor::after{content:"▋";color:var(--lime);animation:pulse .8s infinite;margin-left:1px}
+
+  .actions{display:flex;gap:8px;margin-top:12px}
+  .act{all:unset;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);padding:6px 10px;border:1px solid var(--line);border-radius:8px}
+  .act:hover{color:var(--text)}
+  .act[aria-pressed="true"]{color:var(--accent);border-color:var(--accent)}
+  .act:focus-visible{outline:2px solid var(--text)}
+  .empty{text-align:center;color:var(--muted);padding:40px 0;font-size:14px}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="logo"><span class="a">DUAL</span><span class="sl">//</span><span class="b">SELF</span></div>
+      <p class="tag mono">Confession ẩn danh · không ai biết bạn là ai</p>
+    </div>
+    <div class="online mono" aria-live="polite"><span class="dot" aria-hidden="true"></span><span id="online">128</span> người đang thú nhận</div>
+  </header>
+
+  <main>
+    <section class="card composer" aria-labelledby="compose-title" id="composer">
+      <h1 id="compose-title" class="sr" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Gửi confession</h1>
+      <div class="switch" role="group" aria-label="Chọn danh tính">
+        <button type="button" data-id="mask" aria-pressed="true">◐ Mặt Nạ<small>con người bạn thể hiện</small></button>
+        <button type="button" data-id="real" aria-pressed="false">◑ Thật Lòng<small>con người bạn giấu kín</small></button>
+      </div>
+      <label for="text" class="sr">Nội dung confession</label>
+      <textarea id="text" maxlength="500" placeholder="Viết điều bạn chưa từng nói với ai..."></textarea>
+      <div class="row">
+        <div class="moods" role="group" aria-label="Cảm xúc">
+          <button class="chip" type="button" data-mood="Buồn" aria-pressed="false">Buồn</button>
+          <button class="chip" type="button" data-mood="Crush" aria-pressed="false">Crush</button>
+          <button class="chip" type="button" data-mood="Tội lỗi" aria-pressed="false">Tội lỗi</button>
+          <button class="chip" type="button" data-mood="Áp lực" aria-pressed="false">Áp lực</button>
+          <button class="chip" type="button" data-mood="Bí mật" aria-pressed="false">Bí mật</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <span class="count mono" id="count">0/500</span>
+          <button class="send" id="send" type="button" disabled>Gửi ẩn danh →</button>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="feed-title">
+      <div class="feedhead">
+        <h2 id="feed-title" class="mono">Bức tường thú nhận</h2>
+        <div class="filters" role="group" aria-label="Lọc bài">
+          <button class="chip" type="button" data-filter="all" aria-pressed="true">Tất cả</button>
+          <button class="chip" type="button" data-filter="mask" aria-pressed="false" style="--accent:var(--cyan)">Mặt Nạ</button>
+          <button class="chip" type="button" data-filter="real" aria-pressed="false" style="--accent:var(--pink)">Thật Lòng</button>
+        </div>
+      </div>
+      <ul class="feed" id="feed" aria-live="polite"></ul>
+    </section>
+  </main>
+</div>
+
+<script>
+const aiIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 3v4M9 12h.01M15 12h.01M9 16h6"/></svg>';
+const heart = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z"/></svg>';
+const hug = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg>';
+
+const replies = {
+  mask: [
+    "Mặt nạ không phải lời nói dối — đôi khi nó là cách bạn tự bảo vệ mình. Nhưng nhớ cho bản thân những lúc được tháo nó ra nhé.",
+    "Bạn đang diễn rất tròn vai. Câu hỏi là: vai diễn này đang giúp bạn, hay đang lấy đi năng lượng của bạn?",
+    "Người ta thấy một phiên bản mạnh mẽ của bạn. Không sao cả nếu phiên bản đó thỉnh thoảng cũng mệt."
+  ],
+  real: [
+    "Cảm ơn bạn đã thành thật ở đây. Điều bạn vừa viết cần rất nhiều can đảm — và nó hoàn toàn hợp lệ.",
+    "Cảm xúc thật không cần được ai cho phép. Bạn đã gọi tên nó, đó là bước đầu tiên để nhẹ lòng hơn.",
+    "Mình nghe thấy bạn. Nếu điều này quá nặng, hãy thử chia sẻ với một người bạn tin tưởng — bạn không phải gánh một mình."
+  ]
+};
+
+let posts = [
+  {id:1, id_type:"real", name:"Bóng #4821", mood:"Áp lực", time:"12 phút trước", text:"Cả nhà nghĩ mình học ngành này vì đam mê. Thật ra mình chỉ sợ làm bố mẹ thất vọng. Mỗi tối mình đều tự hỏi có nên bỏ hết không.", ai:"Sống theo kỳ vọng của người khác rất mệt, nhất là khi bạn thương họ. Thử bắt đầu bằng một cuộc nói chuyện nhỏ — không phải để bỏ cuộc, mà để họ hiểu bạn thật sự là ai.", likes:42, hugs:17},
+  {id:2, id_type:"mask", name:"Neon #0917", mood:"Crush", time:"38 phút trước", text:"Ở lớp mình luôn tỏ ra lạnh lùng với cậu ấy. Nhưng mình đã thuộc lòng lịch đi học của cậu ấy rồi 🙃", ai:"Vẻ lạnh lùng là chiếc khiên quen thuộc khi ta sợ bị từ chối. Thử một lời chào thật bình thường xem — đôi khi chỉ vậy là đủ mở một cánh cửa.", likes:88, hugs:5},
+  {id:3, id_type:"real", name:"Bóng #3302", mood:"Tội lỗi", time:"1 giờ trước", text:"Mình đã nói dối bạn thân về một chuyện rất nhỏ, nhưng nó cứ ám ảnh mình suốt 2 năm nay.", ai:"Việc nó vẫn làm bạn day dứt cho thấy bạn trân trọng tình bạn ấy đến mức nào. Một lời xin lỗi muộn vẫn tốt hơn một bí mật mãi mãi.", likes:31, hugs:24}
+];
+
+let identity = "mask", mood = null, filter = "all";
+const $ = s => document.querySelector(s);
+const text = $("#text"), send = $("#send"), feed = $("#feed"), composer = $("#composer");
+const esc = s => s.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function setAccent(){ composer.style.setProperty("--accent", identity === "mask" ? "var(--cyan)" : "var(--pink)"); }
+setAccent();
+
+document.querySelectorAll(".switch button").forEach(b => b.onclick = () => {
+  identity = b.dataset.id;
+  document.querySelectorAll(".switch button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  text.placeholder = identity === "mask" ? "Điều bạn chỉ dám nói khi đeo mặt nạ..." : "Điều thật lòng bạn chưa từng nói với ai...";
+  setAccent();
+});
+document.querySelectorAll("[data-mood]").forEach(b => b.onclick = () => {
+  const on = b.getAttribute("aria-pressed") !== "true";
+  document.querySelectorAll("[data-mood]").forEach(x => x.setAttribute("aria-pressed", "false"));
+  b.setAttribute("aria-pressed", on); mood = on ? b.dataset.mood : null;
+});
+document.querySelectorAll("[data-filter]").forEach(b => b.onclick = () => {
+  filter = b.dataset.filter;
+  document.querySelectorAll("[data-filter]").forEach(x => x.setAttribute("aria-pressed", x === b));
+  render();
+});
+text.oninput = () => { $("#count").textContent = text.value.length + "/500"; send.disabled = !text.value.trim(); };
+text.onkeydown = e => {
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !e.nativeEvent?.isComposing && !e.isComposing && e.keyCode !== 229) submit();
+};
+send.onclick = submit;
+
+function submit(){
+  const v = text.value.trim(); if (!v) return;
+  const tag = String(Math.floor(Math.random()*9000)+1000);
+  const p = {id:Date.now(), id_type:identity, name:(identity==="mask"?"Neon #":"Bóng #")+tag, mood, time:"vừa xong", text:v, ai:null, likes:0, hugs:0, pending:true};
+  posts.unshift(p);
+  text.value = ""; text.oninput();
+  if (filter !== "all" && filter !== identity) document.querySelector('[data-filter="all"]').click(); else render();
+  const reply = replies[identity][Math.floor(Math.random()*3)];
+  setTimeout(() => typeOut(p, reply), 1400);
+}
+
+function typeOut(p, reply){
+  p.pending = false; p.ai = ""; p.typing = true;
+  let i = 0;
+  const t = setInterval(() => {
+    p.ai = reply.slice(0, ++i);
+    const el = document.querySelector(`[data-ai="${p.id}"]`);
+    if (el) el.innerHTML = esc(p.ai);
+    if (i >= reply.length){ clearInterval(t); p.typing = false; if (el) el.classList.remove("cursor"); }
+  }, 18);
+  render();
+}
+
+function render(){
+  const list = posts.filter(p => filter === "all" || p.id_type === filter);
+  if (!list.length){ feed.innerHTML = '<li class="empty">Chưa có lời thú nhận nào ở đây.</li>'; return; }
+  feed.innerHTML = list.map(p => `
+    <li class="card post ${p.id_type}">
+      <div class="meta">
+        <div class="avatar mono" aria-hidden="true">${p.id_type==="mask"?"◐":"◑"}</div>
+        <div><div class="who mono">${p.name}</div><div>${p.time}</div></div>
+        <span class="badge mono">${p.id_type==="mask"?"Mặt Nạ":"Thật Lòng"}</span>
+      </div>
+      <p class="body">${esc(p.text)}</p>
+      ${p.mood?`<span class="mood mono"># ${p.mood}</span>`:""}
+      <div class="ai" role="status">
+        <div class="ai-h mono">${aiIcon} AI lắng nghe</div>
+        ${p.pending
+          ? '<div class="typing" aria-label="AI đang soạn phản hồi"><span></span><span></span><span></span></div>'
+          : `<p data-ai="${p.id}" class="${p.typing?"cursor":""}">${esc(p.ai||"")}</p>`}
+      </div>
+      <div class="actions">
+        <button class="act" type="button" data-like="${p.id}" aria-pressed="${!!p.liked}" aria-label="Đồng cảm, ${p.likes} lượt">${heart}<span class="mono">${p.likes}</span></button>
+        <button class="act" type="button" data-hug="${p.id}" aria-pressed="${!!p.hugged}" aria-label="Ôm một cái, ${p.hugs} lượt">${hug}<span class="mono">${p.hugs}</span></button>
+      </div>
+    </li>`).join("");
+}
+
+feed.onclick = e => {
+  const b = e.target.closest("[data-like],[data-hug]"); if (!b) return;
+  const isLike = b.hasAttribute("data-like");
+  const p = posts.find(x => x.id == (b.dataset.like || b.dataset.hug));
+  if (isLike){ p.liked = !p.liked; p.likes += p.liked?1:-1; } else { p.hugged = !p.hugged; p.hugs += p.hugged?1:-1; }
+  render();
+};
+
+setInterval(() => { $("#online").textContent = 110 + Math.floor(Math.random()*40); }, 4000);
+render();
+</script>
+</body>
+</html>
