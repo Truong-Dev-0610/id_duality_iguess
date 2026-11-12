@@ -1,3 +1,4 @@
+import asyncio
 import os
 import re
 import time
@@ -6,14 +7,14 @@ from typing import Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
 
 BASE_DIR = Path(__file__).resolve().parent
 HTML_PATH = BASE_DIR / "main.html"
-MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
 
 app = FastAPI(title="Thì Thầm - Anonymous Confession & AI Support (Vietnam)")
 
@@ -99,6 +100,24 @@ Nguyên tắc giao tiếp BẮT BUỘC:
 """.strip()
 
 
+
+async def call_gemini(client: genai.Client, contents, config: types.GenerateContentConfig) -> types.GenerateContentResponse:
+    try:
+        return await asyncio.wait_for(
+            client.aio.models.generate_content(
+                model=MODEL_NAME,
+                contents=contents,
+                config=config,
+            ),
+            timeout=15.0,
+        )
+    except asyncio.TimeoutError:
+        print(f"[Gemini timeout] model={MODEL_NAME} (>15s)", flush=True)
+        raise RuntimeError(f"Gemini ({MODEL_NAME}) không phản hồi sau 15s")
+    except Exception as exc:
+        print(f"[Gemini error] model={MODEL_NAME}: {repr(exc)}", flush=True)
+        raise
+
 def get_gemini_client() -> genai.Client:
     api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if not api_key:
@@ -106,7 +125,7 @@ def get_gemini_client() -> genai.Client:
             status_code=503,
             detail="Chưa cấu hình GEMINI_API_KEY trên máy chủ. Hãy đặt biến môi trường GEMINI_API_KEY rồi khởi động lại backend.",
         )
-    return genai.Client(api_key=api_key)
+    return genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=15000))
 
 
 # In-memory store for confessions (Vietnamese community feed)
@@ -206,6 +225,11 @@ async def serve_frontend():
     return FileResponse(HTML_PATH)
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return Response(status_code=204)
+
+
 @app.get("/api/health")
 async def health():
     return {
@@ -280,6 +304,8 @@ async def ai_therapy_chat(payload: AIChatRequest):
 
     contents: list[types.Content] = []
     for turn in payload.history[-12:]:
+        if not contents and turn.role != "user":
+            continue
         contents.append(
             types.Content(
                 role=turn.role,
@@ -302,20 +328,20 @@ async def ai_therapy_chat(payload: AIChatRequest):
     )
 
     try:
-        response = await client.aio.models.generate_content(
-            model=MODEL_NAME,
+        response = await call_gemini(
+            client,
             contents=contents,
             config=types.GenerateContentConfig(
                 system_instruction=THERAPY_SYSTEM_INSTRUCTION,
-                temperature=0.75,
-                max_output_tokens=600,
+                thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW),
+                max_output_tokens=1024,
             ),
         )
         reply_text = (response.text or "").strip()
         if not reply_text:
             reply_text = "Mình đang ở đây lắng nghe bạn nè. Bạn có thể kể thêm một chút về điều đang làm bạn nặng lòng không?"
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Lỗi kết nối Gemini: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"Lỗi kết nối Gemini: {exc}") from exc
 
     mentions_hotline = any(num in reply_text for num in ("096 306 1414", "0963061414", "111", "115", "0984 104 115"))
     return {
@@ -337,15 +363,18 @@ async def generate_ai_comment(payload: AICommentRequest):
         "Nếu bài viết có dấu hiệu tự hại hoặc khủng hoảng nặng, hãy động viên dịu dàng và nhắc số Đường dây nóng Ngày Mai 096 306 1414 (Việt Nam)."
     )
     try:
-        response = await client.aio.models.generate_content(
-            model=MODEL_NAME,
+        response = await call_gemini(
+            client,
             contents=prompt,
-            config=types.GenerateContentConfig(temperature=0.85, max_output_tokens=120),
+            config=types.GenerateContentConfig(
+                thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW),
+                max_output_tokens=256,
+            ),
         )
         text = (response.text or "").strip().strip('"')
         return {"text": text or "Ôm bạn một cái nha, cố lên nè."}
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Lỗi Gemini khi tạo bình luận: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"Lỗi Gemini khi tạo bình luận: {exc}") from exc
 
 
 @app.post("/api/dm-reply")
@@ -362,15 +391,18 @@ async def generate_dm_reply(payload: DMReplyRequest):
         "Nếu đối phương nhắc đến tự tử/tự hại, hãy khuyên họ gọi ngay Đường dây nóng Ngày Mai 096 306 1414 hoặc 111 / 115."
     )
     try:
-        response = await client.aio.models.generate_content(
-            model=MODEL_NAME,
+        response = await call_gemini(
+            client,
             contents=prompt,
-            config=types.GenerateContentConfig(temperature=0.85, max_output_tokens=150),
+            config=types.GenerateContentConfig(
+                thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW),
+                max_output_tokens=2048,
+            ),
         )
         text = (response.text or "").strip().strip('"')
         return {"text": text or "Cảm ơn bạn đã lắng nghe mình nha."}
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Lỗi Gemini khi trả lời tin nhắn: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"Lỗi Gemini khi trả lời tin nhắn: {exc}") from exc
 
 
 if __name__ == "__main__":
