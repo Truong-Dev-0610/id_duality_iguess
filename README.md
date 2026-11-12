@@ -1,1 +1,1 @@
-smth funny
+actual project
