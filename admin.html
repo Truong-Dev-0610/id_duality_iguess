@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>DUAL // SELF — Quản trị</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Be+Vietnam+Pro:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root{--bg:#FFF7EE;--ink:#2D2440;--muted:#7A7090;--lav:#C9BDFF;--lav-d:#7B68E8;--peach:#FFC6B3;--peach-d:#E8795A;--mint:#BFEBD6;--mint-d:#2E9E74;--card:#fff;--line:#2D2440}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"Be Vietnam Pro",system-ui,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5;min-height:100vh}
+  h1,h2,h3{font-family:"Baloo 2",sans-serif}
+  .wrap{max-width:1000px;margin:0 auto;padding:20px 16px 60px;display:flex;flex-direction:column;gap:16px}
+  header{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  .card{background:var(--card);border:2px solid var(--line);border-radius:18px;box-shadow:4px 4px 0 var(--line);padding:16px;overflow-x:auto}
+  button,.btn{font:inherit;font-weight:600;border:2px solid var(--line);background:#fff;border-radius:999px;padding:5px 14px;cursor:pointer}
+  button.pri{background:var(--mint)} button.dan{background:var(--peach)}
+  button:disabled{opacity:.5}
+  input,select,textarea{font:inherit;font-size:14px;border:2px solid #E5DEEF;border-radius:10px;padding:7px 10px;background:#FFFCF8;width:100%}
+  textarea{min-height:140px}
+  label{font-size:12.5px;color:var(--muted);display:block}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap}
+  .tabs button[aria-selected="true"]{background:var(--ink);color:#fff}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  .stat b{font-family:"Baloo 2";font-size:30px;display:block;line-height:1.1}
+  .stat span{font-size:12.5px;color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{text-align:left;padding:7px 8px;border-bottom:1px solid #EEE7F7;vertical-align:top}
+  th{font-size:12px;color:var(--muted)}
+  .bar{display:flex;align-items:center;gap:8px;font-size:12.5px;margin:3px 0}
+  .bar i{display:block;height:12px;background:var(--lav-d);border-radius:6px;min-width:3px}
+  .lv{font-weight:700;border:2px solid var(--line);border-radius:999px;padding:1px 9px;font-size:12px}
+  .lv3{background:#FF9E8A}.lv2{background:var(--peach)}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+  .row>*{flex:1;min-width:140px}
+  .msg{font-size:13px;color:var(--muted)} .err{color:#B3261E}
+  .hide{display:none!important}
+  .note{background:#F6F2FF;border-radius:12px;padding:10px 12px;font-size:13px}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <div><h1>DUAL // SELF · Quản trị</h1><p class="msg" id="who">Chưa đăng nhập</p></div>
+    <div><a class="btn" href="/" style="text-decoration:none;color:inherit">← Về trang chính</a> <button id="logout" class="hide">Đăng xuất</button></div>
+  </header>
+
+  <section class="card" id="loginBox" style="max-width:380px">
+    <h2>Đăng nhập</h2>
+    <form id="loginForm" class="row" style="flex-direction:column;align-items:stretch">
+      <label>Tên đăng nhập<input name="u" autocomplete="username" required></label>
+      <label>Mật khẩu<input name="p" type="password" autocomplete="current-password" required></label>
+      <p class="msg err" id="loginErr"></p>
+      <button class="pri">Đăng nhập</button>
+    </form>
+  </section>
+
+  <div id="app" class="hide">
+    <div class="tabs" role="tablist" id="tabs"></div>
+    <section id="view" style="display:flex;flex-direction:column;gap:14px;margin-top:14px"></section>
+  </div>
+</main>
+
+<script src="assets/config.js"></script>
+<script>
+(function(){
+  "use strict";
+  var API=(window.DUAL_API_BASE||"").replace(/\/$/,""), KEY="dualself.admin.token";
+  var token=sessionStorage.getItem(KEY)||"", me=null, tab="overview";
+  var $=function(s,r){return (r||document).querySelector(s)};
+  var esc=function(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})};
+  var CAT={suicide:"Tự tử",self_harm:"Tự làm hại",violence:"Bạo lực",abuse:"Bị xâm hại",bullying:"Bắt nạt",distress:"Căng thẳng",eating_disorder:"Ăn uống",crisis:"Khủng hoảng"};
+  var catVi=function(s){return String(s||"").split(",").filter(Boolean).map(function(c){return CAT[c]||c}).join(", ")};
+
+  function api(path,opt){
+    opt=opt||{}; var h={}; if(token)h.Authorization="Bearer "+token;
+    var body=opt.form||undefined; if(opt.body){h["Content-Type"]="application/json";body=JSON.stringify(opt.body)}
+    return fetch(API+"/api"+path,{method:opt.method||"GET",headers:h,body:body}).then(function(r){
+      return r.json().catch(function(){return {}}).then(function(j){
+        if(r.status===401&&token){logout()}
+        if(!r.ok){var e=new Error(j.message||j.error||"Lỗi");e.status=r.status;throw e}
+        return j;
+      });
+    });
+  }
+  function logout(){sessionStorage.removeItem(KEY);token="";me=null;boot()}
+  $("#logout").onclick=function(){api("/auth/logout",{method:"POST"}).catch(function(){}).then(logout)};
+
+  $("#loginForm").onsubmit=function(e){
+    e.preventDefault(); var f=e.target;
+    api("/auth/login",{method:"POST",body:{username:f.u.value,password:f.p.value}}).then(function(j){
+      if(["admin","teacher"].indexOf(j.user.role)<0){$("#loginErr").textContent="Tài khoản này không có quyền vào trang quản trị";token=j.token;return api("/auth/logout",{method:"POST"}).catch(function(){}).then(function(){token=""})}
+      token=j.token;sessionStorage.setItem(KEY,token);f.p.value="";boot();
+    }).catch(function(err){$("#loginErr").textContent=err.message});
+  };
+
+  function boot(){
+    if(!token){me=null;$("#loginBox").classList.remove("hide");$("#app").classList.add("hide");$("#logout").classList.add("hide");$("#who").textContent="Chưa đăng nhập";return}
+    api("/auth/me").then(function(j){
+      me=j.user;$("#loginBox").classList.add("hide");$("#app").classList.remove("hide");$("#logout").classList.remove("hide");
+      $("#who").textContent=(me.username||me.alias)+" · "+(me.role==="admin"?"Quản trị viên":"Giáo viên");
+      if(me.role!=="admin")tab="safety";
+      drawTabs();show();
+    }).catch(function(){});
+  }
+  function drawTabs(){
+    var all=[["overview","Tổng quan"],["safety","Cảnh báo an toàn"],["kb","Kho kiến thức"],["users","Người dùng"],["ai","AI & Hotline"]];
+    if(me.role!=="admin")all=all.filter(function(t){return t[0]==="safety"});
+    $("#tabs").innerHTML=all.map(function(t){return '<button role="tab" aria-selected="'+(tab===t[0])+'" data-t="'+t[0]+'">'+t[1]+"</button>"}).join("");
+  }
+  $("#tabs").onclick=function(e){var b=e.target.closest("button");if(!b)return;tab=b.dataset.t;drawTabs();show()};
+  function show(){var v=$("#view");v.innerHTML='<p class="msg">Đang tải…</p>';({overview:vOverview,safety:vSafety,kb:vKb,users:vUsers,ai:vAi})[tab](v).catch(function(e){v.innerHTML='<p class="msg err">'+esc(e.message)+"</p>"})}
+
+  /* ---- Tổng quan */
+  function bars(items,key,val,max){
+    max=max||Math.max.apply(null,items.map(function(i){return i[val]}).concat([1]));
+    return items.length?items.map(function(i){return '<div class="bar"><span style="min-width:110px">'+esc(i[key])+'</span><i style="width:'+Math.round(i[val]/max*160)+'px"></i><b>'+i[val]+"</b></div>"}).join(""):'<p class="msg">Chưa có dữ liệu</p>';
+  }
+  function vOverview(v){return api("/admin/stats").then(function(s){
+    var role={student:"Học sinh",parent:"Phụ huynh",teacher:"Giáo viên",admin:"Quản trị"};
+    v.innerHTML='<div class="grid">'+
+      stat(s.totals.conversations,"Cuộc trò chuyện")+stat(s.totals.messages,"Tin nhắn")+stat(s.totals.open_alerts,"Cảnh báo chưa xử lý")+stat(s.totals.kb_documents+" / "+s.totals.kb_chunks,"Tài liệu / đoạn RAG")+"</div>"+
+      '<div class="card"><h3>Người dùng theo vai trò</h3>'+bars(Object.keys(s.users).map(function(k){return {n:role[k]||k,c:s.users[k]}}),"n","c")+"</div>"+
+      '<div class="card"><h3>Tin nhắn 14 ngày gần đây</h3>'+bars(s.daily,"day","messages")+"</div>"+
+      '<div class="grid"><div class="card"><h3>Tâm trạng</h3>'+bars(s.moods,"mood","n")+'</div><div class="card"><h3>Chủ đề</h3>'+bars(s.topics,"topic","n")+"</div></div>"+
+      '<div class="grid"><div class="card"><h3>Cảnh báo theo mức</h3>'+bars(s.safety_by_level.map(function(x){return {l:x.level===3?"Khủng hoảng (3)":"Nguy cơ cao (2)",n:x.n}}),"l","n")+'</div><div class="card"><h3>Cảnh báo theo nhóm (30 ngày)</h3>'+bars(s.safety_by_category.map(function(x){return {c:catVi(x.category),n:x.n}}),"c","n")+"</div></div>"+
+      '<div class="card"><h3>Nhà cung cấp AI (7 ngày)</h3><table><tr><th>Nhà cung cấp</th><th>Số lần gọi</th><th>Thành công</th><th>Độ trễ TB</th></tr>'+
+      (s.providers.map(function(p){return "<tr><td>"+esc(p.provider)+"</td><td>"+p.calls+"</td><td>"+p.ok+"/"+p.calls+"</td><td>"+(p.avg_ms||0)+" ms</td></tr>"}).join("")||'<tr><td colspan="4" class="msg">Chưa có</td></tr>')+"</table></div>";
+  })}
+  function stat(n,l){return '<div class="card stat"><b>'+esc(n)+"</b><span>"+esc(l)+"</span></div>"}
+
+  /* ---- Cảnh báo */
+  function vSafety(v){return api("/admin/safety").then(function(j){
+    var adm=me.role==="admin";
+    v.innerHTML='<div class="note">Chỉ hiển thị mức nguy cơ cao/khủng hoảng. '+(adm?"Trích đoạn (160 ký tự) chỉ quản trị viên xem được.":"Giáo viên không xem nội dung hội thoại, chỉ xem mức độ và biệt danh để phối hợp hỗ trợ.")+
+      ' Cần có quy trình nhà trường để liên hệ và hỗ trợ em theo từng trường hợp.</div><div class="card"><table><tr><th>Thời gian (UTC)</th><th>Mức</th><th>Nhóm</th><th>Nguồn</th><th>Biệt danh</th>'+(adm?"<th>Trích đoạn</th>":"")+"<th>Xử lý</th></tr>"+
+      (j.items.map(function(i){return "<tr><td>"+esc(i.created_at)+'</td><td><span class="lv lv'+i.level+'">'+(i.level===3?"Khủng hoảng":"Cao")+"</span></td><td>"+esc(catVi(i.categories))+"</td><td>"+esc(i.source)+"</td><td>"+esc(i.alias||"—")+"</td>"+(adm?"<td>"+esc(i.excerpt||"—")+"</td>":"")+
+        "<td>"+(i.handled?"✔ "+esc(i.note||"Đã xử lý"):'<button data-h="'+i.id+'" class="pri">Đánh dấu đã xử lý</button>')+"</td></tr>"}).join("")||'<tr><td colspan="7" class="msg">Không có cảnh báo</td></tr>')+"</table></div>";
+    v.onclick=function(e){var b=e.target.closest("[data-h]");if(!b)return;var n=prompt("Ghi chú xử lý (không ghi thông tin nhạy cảm):","");if(n===null)return;
+      api("/admin/safety/"+b.dataset.h,{method:"PATCH",body:{handled:true,note:n}}).then(show)};
+  })}
+
+  /* ---- Kho kiến thức */
+  function vKb(v){return api("/admin/kb").then(function(j){
+    v.innerHTML='<div class="card"><h3>Thêm tài liệu</h3><form id="kbForm" class="row" style="flex-direction:column;align-items:stretch">'+
+      '<div class="row"><label>Tiêu đề<input name="title" required></label><label>Đối tượng<select name="audience"><option value="all">Tất cả</option><option value="student">Học sinh</option><option value="parent">Phụ huynh</option><option value="teacher">Giáo viên</option></select></label><label>Từ khoá (phân tách bằng dấu phẩy)<input name="tags"></label></div>'+
+      '<label>Nội dung (dán văn bản)<textarea name="content"></textarea></label><label>…hoặc tải tệp .txt / .md / .pdf<input type="file" name="file" accept=".txt,.md,.pdf"></label>'+
+      '<label>Nguồn tham khảo (tuỳ chọn)<input name="source"></label><p class="msg" id="kbMsg"></p><button class="pri">Lưu & lập chỉ mục</button></form></div>'+
+      '<div class="card"><h3>Thử truy xuất (RAG)</h3><div class="row"><label>Câu hỏi thử<input id="tq" placeholder="vd: bị bạn tẩy chay phải làm sao"></label><label>Vai trò<select id="tr"><option>student</option><option>parent</option><option>teacher</option></select></label><button id="tb">Thử</button></div><div id="tres"></div></div>'+
+      '<div class="card"><h3>Tài liệu ('+j.items.length+')</h3><table><tr><th>Tiêu đề</th><th>Đối tượng</th><th>Đoạn</th><th>Trạng thái</th><th></th></tr>'+
+      j.items.map(function(d){return "<tr><td>"+esc(d.title)+"<br><small class=\"msg\">"+esc(d.source||"")+"</small></td><td>"+esc(d.audience)+"</td><td>"+d.chunks+"</td><td>"+(d.is_active?"Đang bật":"Tắt")+'</td><td><button data-tg="'+d.id+'" data-on="'+d.is_active+'">'+(d.is_active?"Tắt":"Bật")+'</button> <button class="dan" data-del="'+d.id+'">Xoá</button></td></tr>'}).join("")+"</table></div>";
+    $("#kbForm").onsubmit=function(e){e.preventDefault();var f=e.target,file=f.file.files[0],p;
+      if(file){var fd=new FormData();["title","audience","tags","source"].forEach(function(k){fd.append(k,f[k].value)});fd.append("file",file);p=api("/admin/kb",{method:"POST",form:fd})}
+      else p=api("/admin/kb",{method:"POST",body:{title:f.title.value,audience:f.audience.value,tags:f.tags.value,source:f.source.value,content:f.content.value}});
+      p.then(show).catch(function(err){$("#kbMsg").textContent=err.message;$("#kbMsg").className="msg err"})};
+    $("#tb").onclick=function(){api("/admin/kb/test",{method:"POST",body:{query:$("#tq").value,role:$("#tr").value}}).then(function(r){
+      $("#tres").innerHTML=r.hits.length?r.hits.map(function(h){return '<div class="note" style="margin-top:8px"><b>'+esc(h.title)+"</b> <small>(điểm "+h.score+")</small><br>"+esc(h.text)+"…</div>"}).join(""):'<p class="msg">Không tìm thấy đoạn phù hợp — AI sẽ trả lời không có tài liệu tham khảo.</p>'})};
+    v.onclick=function(e){var d=e.target.closest("[data-del]"),t=e.target.closest("[data-tg]");
+      if(d&&confirm("Xoá tài liệu này?"))api("/admin/kb/"+d.dataset.del,{method:"DELETE"}).then(show);
+      if(t)api("/admin/kb/"+t.dataset.tg,{method:"PATCH",body:{is_active:!(t.dataset.on==="1"||t.dataset.on==="true")}}).then(show)};
+  })}
+
+  /* ---- Người dùng */
+  function vUsers(v){return api("/admin/users").then(function(j){
+    v.innerHTML='<div class="card"><h3>Tạo tài khoản</h3><form id="uForm" class="row"><label>Tên đăng nhập<input name="u" required></label><label>Mật khẩu (≥ 8)<input name="p" type="password" required></label><label>Vai trò<select name="r"><option value="teacher">Giáo viên</option><option value="parent">Phụ huynh</option><option value="student">Học sinh</option><option value="admin">Quản trị</option></select></label><button class="pri">Tạo</button></form><p class="msg err" id="uMsg"></p></div>'+
+      '<div class="card"><h3>Người dùng (300 gần nhất)</h3><table><tr><th>ID</th><th>Tên / biệt danh</th><th>Vai trò</th><th>Loại</th><th>Hoạt động gần nhất</th><th></th></tr>'+
+      j.items.map(function(u){return "<tr><td>"+u.id+"</td><td>"+esc(u.username||u.alias)+'</td><td><select data-r="'+u.id+'" style="width:auto">'+["student","parent","teacher","admin"].map(function(r){return "<option"+(r===u.role?" selected":"")+">"+r+"</option>"}).join("")+"</select></td><td>"+(u.is_guest?"ẩn danh":"đăng ký")+"</td><td>"+esc(u.last_seen||"—")+'</td><td><button data-a="'+u.id+'" data-on="'+u.is_active+'" class="'+(u.is_active?"dan":"pri")+'">'+(u.is_active?"Khoá":"Mở khoá")+"</button></td></tr>"}).join("")+"</table></div>";
+    $("#uForm").onsubmit=function(e){e.preventDefault();var f=e.target;api("/admin/users",{method:"POST",body:{username:f.u.value,password:f.p.value,role:f.r.value}}).then(show).catch(function(er){$("#uMsg").textContent=er.message})};
+    v.onchange=function(e){var s=e.target.closest("[data-r]");if(s&&confirm("Đổi vai trò người dùng này?"))api("/admin/users/"+s.dataset.r,{method:"PATCH",body:{role:s.value}}).catch(function(er){alert(er.message);show()})};
+    v.onclick=function(e){var b=e.target.closest("[data-a]");if(b)api("/admin/users/"+b.dataset.a,{method:"PATCH",body:{is_active:!(b.dataset.on==="1"||b.dataset.on==="true")}}).then(show).catch(function(er){alert(er.message)})};
+  })}
+
+  /* ---- AI & Hotline */
+  function vAi(v){return Promise.all([api("/admin/ai"),api("/admin/hotlines")]).then(function(r){
+    var st=r[0].settings,ps=r[0].providers,hl=r[1].items;
+    v.innerHTML='<div class="note">Khóa API chỉ được đặt bằng biến môi trường trên máy chủ. Trang này chỉ cho biết nhà cung cấp nào đã cấu hình, không bao giờ hiển thị khóa.</div>'+
+      '<div class="card"><h3>Nhà cung cấp AI (theo thứ tự ưu tiên; tự chuyển khi lỗi)</h3><table><tr><th>Bật</th><th>Tên</th><th>Mô hình</th><th>Khóa</th><th>Thứ tự</th><th></th></tr>'+
+      ps.map(function(p,i){return '<tr data-n="'+esc(p.name)+'"><td><input type="checkbox" class="en" style="width:auto" '+(st.disabled.indexOf(p.name)<0?"checked":"")+"></td><td>"+esc(p.name)+'</td><td><input class="md" value="'+esc(p.model)+'"></td><td>'+(p.configured?"✔ đã cấu hình":"—")+'</td><td><button data-up="'+i+'">↑</button> <button data-dn="'+i+'">↓</button></td><td><button data-test="'+esc(p.name)+'">Thử</button></td></tr>'}).join("")+"</table>"+
+      '<label style="margin-top:10px"><input type="checkbox" id="auc" style="width:auto" '+(st.allow_user_choice?"checked":"")+"> Cho phép người dùng tự chọn mô hình</label><p class=\"msg\" id=\"aiMsg\"></p><button class=\"pri\" id=\"aiSave\">Lưu cấu hình AI</button></div>"+
+      '<div class="card"><h3>Số điện thoại hỗ trợ (hiển thị khi phát hiện nguy cơ)</h3><p class="msg">Hãy xác minh số và giờ hoạt động trước khi triển khai. Mỗi dòng: tên | số | giờ | mô tả | nhóm (suicide,self_harm,crisis,abuse,violence,bullying,distress)</p><textarea id="hl">'+
+      esc(hl.map(function(h){return [h.name,h.number,h.hours,h.desc,h.tags.join(",")].join(" | ")}).join("\n"))+'</textarea><p class="msg" id="hlMsg"></p><button class="pri" id="hlSave">Lưu hotline</button></div>';
+    var order=ps.map(function(p){return p.name});
+    function save(){var rows=[].slice.call(v.querySelectorAll("tr[data-n]"));
+      return api("/admin/ai",{method:"PUT",body:{order:rows.map(function(r){return r.dataset.n}),disabled:rows.filter(function(r){return !$(".en",r).checked}).map(function(r){return r.dataset.n}),
+        models:rows.reduce(function(o,r){o[r.dataset.n]=$(".md",r).value;return o},{}),allow_user_choice:$("#auc").checked}})}
+    $("#aiSave").onclick=function(){save().then(function(){$("#aiMsg").textContent="Đã lưu"}).catch(function(e){$("#aiMsg").textContent=e.message})};
+    $("#hlSave").onclick=function(){var items=$("#hl").value.split("\n").map(function(l){var p=l.split("|").map(function(x){return x.trim()});return p[0]&&p[1]?{name:p[0],number:p[1],hours:p[2]||"",desc:p[3]||"",tags:(p[4]||"").split(",").map(function(x){return x.trim()}).filter(Boolean)}:null}).filter(Boolean);
+      api("/admin/hotlines",{method:"PUT",body:{items:items}}).then(function(){$("#hlMsg").textContent="Đã lưu"}).catch(function(e){$("#hlMsg").textContent=e.message})};
+    v.onclick=function(e){var b=e.target.closest("button[data-up],button[data-dn],button[data-test]");if(!b)return;
+      if(b.dataset.test){b.textContent="…";save().then(function(){return api("/admin/ai/test",{method:"POST",body:{provider:b.dataset.test}})}).then(function(j){b.textContent="OK "+j.latency_ms+"ms"}).catch(function(er){b.textContent="Lỗi";alert(er.message)});return}
+      var rows=[].slice.call(v.querySelectorAll("tr[data-n]")),i=+(b.dataset.up||b.dataset.dn),j=b.dataset.up?i-1:i+1;if(j<0||j>=rows.length)return;
+      var par=rows[0].parentNode;par.insertBefore(rows[b.dataset.up?i:j],rows[b.dataset.up?j:i]);
+      [].slice.call(v.querySelectorAll("tr[data-n]")).forEach(function(r,k){r.querySelector("[data-up]").dataset.up=k;r.querySelector("[data-dn]").dataset.dn=k})};
+  })}
+
+  boot();
+})();
+</script>
+</body>
+</html>

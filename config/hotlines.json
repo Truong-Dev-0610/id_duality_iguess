@@ -1,0 +1,6 @@
+[
+  {"id": "emergency", "name": "Cấp cứu y tế", "number": "115", "desc": "Khi có nguy hiểm đến tính mạng ngay lúc này", "hours": "24/7", "tags": ["suicide", "self_harm", "crisis", "violence"]},
+  {"id": "child111", "name": "Tổng đài quốc gia bảo vệ trẻ em", "number": "111", "desc": "Miễn phí, tư vấn và hỗ trợ khi bị bạo hành, xâm hại hoặc đang rất khó khăn", "hours": "24/7", "tags": ["suicide", "self_harm", "crisis", "abuse", "violence", "bullying", "distress"]},
+  {"id": "police", "name": "Công an", "number": "113", "desc": "Khi bản thân hoặc người khác đang bị đe dọa, bạo lực", "hours": "24/7", "tags": ["violence", "abuse"]},
+  {"id": "ngaymai", "name": "Đường dây nóng Ngày mai", "number": "096 306 1414", "desc": "Hỗ trợ tâm lý qua điện thoại (số và giờ hoạt động cần được nhà trường xác minh lại)", "hours": "13:00–20:30, Thứ 4 đến Chủ nhật", "tags": ["suicide", "self_harm", "crisis", "distress"]}
+]

@@ -1,0 +1,32 @@
+/* Bổ sung cho main.html — dùng lại biến màu và lớp sẵn có (.drawer, .msg, .quick, .ctx...) */
+.ai-btn{background:var(--peach)}
+.ai-foot{padding:10px 16px 12px;border-top:2px solid var(--line);background:#fff}
+.ai-foot .quick{margin-bottom:6px}
+.ai-foot .quick button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--line)}
+.ai-row{display:flex;gap:8px;align-items:flex-end}
+.ai-row textarea{min-height:42px;max-height:120px;border:2px solid #E5DEEF;border-style:solid;border-radius:16px;padding:9px 14px;font-size:14.5px;resize:none;flex:1}
+.ai-row textarea:focus{border-color:var(--lav-d)}
+.d-actions{display:flex;gap:6px}
+.d-actions button{width:34px;height:34px;border-radius:10px;border:2px solid var(--line);background:#fff;cursor:pointer;display:grid;place-items:center;font-size:15px}
+.msg.ai-them{align-self:flex-start;background:#fff;border:2px solid var(--line);border-bottom-left-radius:4px}
+.srcs{align-self:flex-start;display:flex;gap:6px;flex-wrap:wrap;margin-top:-4px}
+.srcs span{font-size:11px;color:var(--muted);background:#fff;border:1.5px dashed #CFC6E0;border-radius:999px;padding:2px 9px}
+.care{align-self:stretch;background:#FFF1EC;border:2px solid var(--line);border-radius:16px;padding:12px 14px;font-size:13.5px}
+.care b{font-family:"Baloo 2",sans-serif;font-size:15px;display:block;margin-bottom:4px}
+.care.crisis{background:#FFE3DC}
+.care ul{list-style:none;margin:8px 0 0;display:flex;flex-direction:column;gap:6px}
+.care li{display:flex;justify-content:space-between;gap:10px;align-items:center}
+.care li small{display:block;color:var(--muted);font-size:11.5px}
+.care a.call{flex-shrink:0;font-weight:700;text-decoration:none;color:var(--ink);background:var(--mint);border:2px solid var(--line);border-radius:999px;padding:3px 12px}
+.care .row2{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.care .row2 button{font-size:12.5px;font-weight:600;border:2px solid var(--line);background:#fff;border-radius:999px;padding:4px 12px;cursor:pointer}
+.conv-item{display:flex;gap:8px;align-items:stretch}
+.conv-item .convo{flex:1}
+.conv-item .del{width:38px;border:2px solid var(--line);background:#fff;border-radius:12px;cursor:pointer}
+.acct{display:flex;flex-direction:column;gap:10px}
+.acct label{font-size:12.5px;color:var(--muted)}
+.acct input,.acct select{width:100%;border:2px solid #E5DEEF;border-radius:12px;padding:8px 12px;font:inherit;font-size:14px;background:#FFFCF8}
+.acct .primary{font-family:"Baloo 2",sans-serif;font-weight:700;border:2px solid var(--line);background:var(--mint);border-radius:12px;padding:8px 14px;cursor:pointer;box-shadow:2px 2px 0 var(--line)}
+.acct .link{background:none;border:0;color:var(--lav-d);text-decoration:underline;cursor:pointer;font-size:13px;align-self:flex-start}
+.acct .err{color:#B3261E;font-size:13px}
+#aiCare{margin:-6px 0 0}

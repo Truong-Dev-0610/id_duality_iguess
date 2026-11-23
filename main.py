@@ -1,7 +1,10 @@
 import asyncio
+import json
 import os
 import re
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Literal
 
@@ -15,8 +18,9 @@ from pydantic import BaseModel, Field
 BASE_DIR = Path(__file__).resolve().parent
 HTML_PATH = BASE_DIR / "main.html"
 MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free")
 
-app = FastAPI(title="Thì Thầm - Anonymous Confession & AI Support (Vietnam)")
+app = FastAPI(title="Thì Thầm - Ahnonymous Confession & AI Support (Vietnam)")
 
 app.add_middleware(
     CORSMiddleware,
@@ -101,6 +105,29 @@ Nguyên tắc giao tiếp BẮT BUỘC:
 
 
 
+def get_gemini_api_key() -> str | None:
+    return os.getenv("VERTEX_AI_KEY") or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+
+
+def get_gemini_client() -> genai.Client:
+    api_key = get_gemini_api_key()
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Chưa cấu hình GEMINI_API_KEY hoặc OPENROUTER_API_KEY trên máy chủ.",
+        )
+    use_vertex = (
+        api_key.startswith("AQ.")
+        or os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "").lower() in ("1", "true", "yes")
+        or bool(os.getenv("VERTEX_AI_KEY"))
+    )
+    return genai.Client(
+        vertexai=use_vertex,
+        api_key=api_key,
+        http_options=types.HttpOptions(timeout=30000),
+    )
+
+
 async def call_gemini(client: genai.Client, contents, config: types.GenerateContentConfig) -> types.GenerateContentResponse:
     try:
         return await asyncio.wait_for(
@@ -109,23 +136,108 @@ async def call_gemini(client: genai.Client, contents, config: types.GenerateCont
                 contents=contents,
                 config=config,
             ),
-            timeout=15.0,
+            timeout=30.0,
         )
     except asyncio.TimeoutError:
-        print(f"[Gemini timeout] model={MODEL_NAME} (>15s)", flush=True)
-        raise RuntimeError(f"Gemini ({MODEL_NAME}) không phản hồi sau 15s")
+        print(f"[Gemini timeout] model={MODEL_NAME} (>30s)", flush=True)
+        raise RuntimeError(f"Gemini ({MODEL_NAME}) không phản hồi sau 30s")
     except Exception as exc:
         print(f"[Gemini error] model={MODEL_NAME}: {repr(exc)}", flush=True)
         raise
 
-def get_gemini_client() -> genai.Client:
-    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+
+def _post_openrouter_sync(api_key: str, payload: dict) -> str:
+    req = urllib.request.Request(
+        "https://openrouter.ai/api/v1/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "http://127.0.0.1:8000",
+            "X-Title": "Thi Tham",
+            "User-Agent": "ThiTham/1.0",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30.0) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return (data["choices"][0]["message"]["content"] or "").strip()
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="ignore")[:300]
+        raise RuntimeError(f"OpenRouter {exc.code}: {body}") from exc
+
+
+async def call_openrouter(
+    messages: list[dict[str, str]],
+    max_tokens: int = 1024,
+) -> str:
+    api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
-        raise HTTPException(
-            status_code=503,
-            detail="Chưa cấu hình GEMINI_API_KEY trên máy chủ. Hãy đặt biến môi trường GEMINI_API_KEY rồi khởi động lại backend.",
-        )
-    return genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=15000))
+        raise RuntimeError("OPENROUTER_API_KEY chưa được cấu hình")
+    payload = {
+        "model": OPENROUTER_MODEL,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": 0.75,
+    }
+    return await asyncio.to_thread(_post_openrouter_sync, api_key, payload)
+
+
+async def generate_ai_text(
+    *,
+    system_instruction: str | None,
+    history: list[dict[str, str]],
+    user_prompt: str,
+    max_tokens: int = 1024,
+) -> str:
+    gemini_err: Exception | None = None
+    if get_gemini_api_key():
+        try:
+            client = get_gemini_client()
+            contents: list[types.Content] = []
+            for turn in history:
+                if not contents and turn["role"] != "user":
+                    continue
+                contents.append(
+                    types.Content(
+                        role=turn["role"],
+                        parts=[types.Part.from_text(text=turn["text"])],
+                    )
+                )
+            contents.append(
+                types.Content(
+                    role="user",
+                    parts=[types.Part.from_text(text=user_prompt)],
+                )
+            )
+            config = types.GenerateContentConfig(
+                system_instruction=system_instruction,
+                thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW),
+                max_output_tokens=max_tokens,
+            )
+            response = await call_gemini(client, contents=contents, config=config)
+            return (response.text or "").strip()
+        except Exception as exc:
+            gemini_err = exc
+            if not os.getenv("OPENROUTER_API_KEY"):
+                raise
+            print(f"[Fallback -> OpenRouter] Gemini failed: {exc}", flush=True)
+
+    if os.getenv("OPENROUTER_API_KEY"):
+        or_messages: list[dict[str, str]] = []
+        if system_instruction:
+            or_messages.append({"role": "system", "content": system_instruction})
+        for turn in history:
+            role = "assistant" if turn["role"] == "model" else "user"
+            or_messages.append({"role": role, "content": turn["text"]})
+        or_messages.append({"role": "user", "content": user_prompt})
+        return await call_openrouter(or_messages, max_tokens=max_tokens)
+
+    raise gemini_err or HTTPException(
+        status_code=503,
+        detail="Chưa cấu hình GEMINI_API_KEY hoặc OPENROUTER_API_KEY trên máy chủ.",
+    )
 
 
 # In-memory store for confessions (Vietnamese community feed)
@@ -235,7 +347,8 @@ async def health():
     return {
         "status": "ok",
         "country": "VN",
-        "gemini_configured": bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")),
+        "gemini_configured": bool(get_gemini_api_key()),
+        "openrouter_configured": bool(os.getenv("OPENROUTER_API_KEY")),
     }
 
 
@@ -300,19 +413,6 @@ async def ai_therapy_chat(payload: AIChatRequest):
             "hotlines": VIETNAM_HOTLINES,
         }
 
-    client = get_gemini_client()
-
-    contents: list[types.Content] = []
-    for turn in payload.history[-12:]:
-        if not contents and turn.role != "user":
-            continue
-        contents.append(
-            types.Content(
-                role=turn.role,
-                parts=[types.Part.from_text(text=turn.text)],
-            )
-        )
-
     extra_note = ""
     if is_severe_stress:
         extra_note = (
@@ -320,28 +420,20 @@ async def ai_therapy_chat(payload: AIChatRequest):
             "Hãy đồng cảm sâu sắc và đính kèm nhẹ nhàng các số hỗ trợ tâm lý tại Việt Nam như 096 306 1414 (Đường dây nóng Ngày Mai) hoặc 111.]"
         )
 
-    contents.append(
-        types.Content(
-            role="user",
-            parts=[types.Part.from_text(text=f"[{payload.user_alias}]: {user_msg}{extra_note}")],
-        )
-    )
-
+    history = [{"role": t.role, "text": t.text} for t in payload.history[-12:]]
     try:
-        response = await call_gemini(
-            client,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                system_instruction=THERAPY_SYSTEM_INSTRUCTION,
-                thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW),
-                max_output_tokens=1024,
-            ),
+        reply_text = await generate_ai_text(
+            system_instruction=THERAPY_SYSTEM_INSTRUCTION,
+            history=history,
+            user_prompt=f"[{payload.user_alias}]: {user_msg}{extra_note}",
+            max_tokens=1024,
         )
-        reply_text = (response.text or "").strip()
         if not reply_text:
             reply_text = "Mình đang ở đây lắng nghe bạn nè. Bạn có thể kể thêm một chút về điều đang làm bạn nặng lòng không?"
+    except HTTPException:
+        raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Lỗi kết nối Gemini: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"Lỗi kết nối AI: {exc}") from exc
 
     mentions_hotline = any(num in reply_text for num in ("096 306 1414", "0963061414", "111", "115", "0984 104 115"))
     return {
@@ -354,7 +446,6 @@ async def ai_therapy_chat(payload: AIChatRequest):
 
 @app.post("/api/ai-comment")
 async def generate_ai_comment(payload: AICommentRequest):
-    client = get_gemini_client()
     prompt = (
         f"Bạn là người dùng ẩn danh tên '{payload.reply_as}' trên app confession học đường/người trẻ Việt Nam 'thì thầm'.\n"
         f"Bài viết của '{payload.author_name}' (tâm trạng: #{payload.mood}): \"{payload.post_text}\"\n"
@@ -363,23 +454,21 @@ async def generate_ai_comment(payload: AICommentRequest):
         "Nếu bài viết có dấu hiệu tự hại hoặc khủng hoảng nặng, hãy động viên dịu dàng và nhắc số Đường dây nóng Ngày Mai 096 306 1414 (Việt Nam)."
     )
     try:
-        response = await call_gemini(
-            client,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW),
-                max_output_tokens=256,
-            ),
-        )
-        text = (response.text or "").strip().strip('"')
+        text = (await generate_ai_text(
+            system_instruction=None,
+            history=[],
+            user_prompt=prompt,
+            max_tokens=256,
+        )).strip('"')
         return {"text": text or "Ôm bạn một cái nha, cố lên nè."}
+    except HTTPException:
+        raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Lỗi Gemini khi tạo bình luận: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"Lỗi AI khi tạo bình luận: {exc}") from exc
 
 
 @app.post("/api/dm-reply")
 async def generate_dm_reply(payload: DMReplyRequest):
-    client = get_gemini_client()
     convo_lines = "\n".join(
         f"{'Người nhắn' if m.me else payload.with_name}: {m.text}" for m in payload.messages[-10:]
     )
@@ -391,18 +480,17 @@ async def generate_dm_reply(payload: DMReplyRequest):
         "Nếu đối phương nhắc đến tự tử/tự hại, hãy khuyên họ gọi ngay Đường dây nóng Ngày Mai 096 306 1414 hoặc 111 / 115."
     )
     try:
-        response = await call_gemini(
-            client,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW),
-                max_output_tokens=2048,
-            ),
-        )
-        text = (response.text or "").strip().strip('"')
+        text = (await generate_ai_text(
+            system_instruction=None,
+            history=[],
+            user_prompt=prompt,
+            max_tokens=256,
+        )).strip('"')
         return {"text": text or "Cảm ơn bạn đã lắng nghe mình nha."}
+    except HTTPException:
+        raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Lỗi Gemini khi trả lời tin nhắn: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"Lỗi AI khi trả lời tin nhắn: {exc}") from exc
 
 
 if __name__ == "__main__":

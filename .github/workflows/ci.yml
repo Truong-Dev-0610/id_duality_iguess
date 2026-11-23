@@ -1,0 +1,22 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements.txt
+      - run: python -m unittest discover -s server/tests -t . -v
+      - name: Kiểm tra cú pháp JS giao diện
+        run: |
+          node --check assets/ai-chat.js
+          python - <<'PY'
+          import re
+          s = open("admin.html", encoding="utf-8").read()
+          open("/tmp/admin.js", "w").write(re.search(r"<script>\n(.*)</script>", s, re.S).group(1))
+          PY
+          node --check /tmp/admin.js
+      - name: Không để lộ khóa API trong mã nguồn
+        run: "! grep -RInE '(AIza[0-9A-Za-z_-]{30,}|sk-[A-Za-z0-9]{20,}|gsk_[A-Za-z0-9]{20,})' --exclude-dir=.git ."
